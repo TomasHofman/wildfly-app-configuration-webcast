@@ -247,7 +247,7 @@ We are going to use Wildfly Helm Chart to deploy our app on the OpenShift cluste
    
    You can check that the "wildfly" chart is searchable:
    ```shell
-   $ helm repo add wildfly http://docs.wildfly.org/wildfly-charts/
+   $ helm search repo wildfly
    wildfly/wildfly                     	2.0.1        	           	Build and Deploy WildFly applications on OpenShift
    [...]
    ```
