@@ -26,7 +26,7 @@
         <maven.compiler.source>11</maven.compiler.source>
 
         <version.wildfly>26.1.1.Final</version.wildfly>
-        <version.wildfly.plugin>3.0.0.Alpha1</version.wildfly.plugin>
+        <version.wildfly.plugin>3.0.0.Final</version.wildfly.plugin>
     </properties>
 
     <dependencyManagement>

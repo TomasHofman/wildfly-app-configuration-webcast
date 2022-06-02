@@ -1,114 +1,306 @@
 # Wildfly OpenShift Image Configuration Example
 
-This is an example application showcasing how to configure Wildfly OpenShift image via a Wildfly CLI script.
+This repository demonstrates how to deploy the Wildfly application server, containing a simple Jakarta EE application,
+on OpenShift. This demo concentrates on how to configure a Wildfly instance on OpenShift with a **Wildfly CLI
+script** (rather than via environment variables), to show how leveraging CLI scripts has been simplified with the
+release of [Wildfly 26](https://www.wildfly.org/news/2021/12/16/WildFly26-Final-Released/) and the new 
+[Wildfly S2I v2 workflow](https://www.wildfly.org/news/2021/10/29/wildfly-s2i-v2-overview/).
 
-## The Usual Way
+This demo uses following technologies:
 
-Normally, when deploying Wildfly (or JBoss EAP) container on an OpenShift cluster, configuration of the container is
-done via environment variables. Taking a database configuration as an example, you would need to take two steps to
-ensure your application image is able to connect to the database:
+* [Wildfly 26](https://www.wildfly.org/news/2021/12/16/WildFly26-Final-Released/) (or later versions),
+* [Wildfly Maven Plugin 3.x](https://github.com/wildfly/wildfly-maven-plugin/),
+* [Wildfly S2I (Source to Image) v2](https://github.com/wildfly/wildfly-s2i/) container images,
+* [wildfly Helm Charts 2.x](https://docs.wildfly.org/wildfly-charts/).
 
-1. Ensure that the containerized Wildfly instance contains appropriate database driver.
-2. Set environment variables for database connection string, username, password etc, which the Wildfly initialization
-   scripts will use to create a datasource for your application.
+<!--
+For comparison, the [pre-wildfly-26](tree/pre-wildfly-26) branch of this repository shows how the same result could be
+achieved with earlier versions of Wildfly. Notably, a use of a Wildfly CLI script for the configuration of the Wildfly
+instance, as opposed to configuration via environment variables, is much easier with the new workflow.
+-->
 
-### Step 1. - Adding the Database Driver <a name="add-db-driver"></a>
+## Prerequisites
 
-Say we want to connect to a PostgreSQL database instance. Including necessary JDBC driver module in the Wildfly image
-can be achieved by adding the `postgresql-datasource` galleon layer to your provisioning configuration. (This particular
-galleon layer does two things: it adds the JDBC driver module to the application server; and it creates a datasource in
-the application server configuration.)
+Following is assumed:
 
-Note that this step takes place during the application container image *build time*.
+* You have access to an OpenShift cluster. If you don't have access to a cluster, you can get a
+temporary cluster for free on
+the [Developer Sandbox for Red Hat OpenShift page](https://developers.redhat.com/developer-sandbox/get-started).
+* The `oc` command is installed on your system (see [this article](https://developers.redhat.com/openshift/command-line-tools) on how to install it).
+* The `helm` command is installed on your system (see [this article](https://helm.sh/docs/intro/install/) on how to install it).
 
-How to add the galleon layer depends on which method you use to instantiate your OpenShift resources.
+## Example Application
 
-If you use *Helm Chart* to create the OpenShift manifests, the Galleon layers are defined in
-the `build.s2i.galleonLayers` section of the Helm Chart YAML configuration:
+The sample application in this repository contains a static [HTML page](blob/main/src/main/webapp/index.html) and a 
+[JAX-RS endpoint](blob/main/src/main/java/org/wildfly/demo/config/HelloEndpoint.java). This will be important to
+determine which Galleon layers to include to provision the Wildfly server, as can be seen further on.
+
+## Configuring the Wildfly Maven Plugin
+
+As opose to the old Wildfly S2I workflow, the provisioning of the Wildfly server instance is now part of the Maven build
+process. To provision a server instance, the pom.xml contains following section with configuration of the
+[Wildfly Maven Plugin](https://github.com/wildfly/wildfly-maven-plugin/):
+
+```xml
+<plugin>
+    <groupId>org.wildfly.plugins</groupId>
+    <artifactId>wildfly-maven-plugin</artifactId>
+    <version>3.0.0.Final</version>
+    <configuration>
+        <feature-packs>
+            <feature-pack>
+                <location>org.wildfly:wildfly-galleon-pack:${version.wildfly}</location>
+            </feature-pack>
+        </feature-packs>
+        <!-- List of layers to build the application server from: -->
+        <layers>
+            <!-- The jaxrs-server layer provides JAX-RS API implementation -->
+            <layer>jaxrs-server</layer>
+            <!-- The microprofile-health layer provides microprofile health endpoints at
+                 [server address]:9990/api/live and [server address]:9990/api/ready -->
+            <layer>microprofile-health</layer>
+        </layers>
+        <galleon-options>
+            <jboss-fork-embedded>true</jboss-fork-embedded>
+        </galleon-options>
+        <runtime-name>ROOT.war</runtime-name>
+    </configuration>
+    <executions>
+        <execution>
+            <goals>
+                <goal>package</goal>
+            </goals>
+        </execution>
+    </executions>
+</plugin>
+```
+
+The configuration contains two important sections that determine which extensions are going to be included in the
+provisioned server instance:
+
+1. a list of feature packs (the `<feature-packs>` element),
+2. and a list of layers (the `<layers>` element).
+
+Exapliner: A feature pack (aka a Galleon pack) is a package of functionalities (called layers) that can be used to
+provision a Wildfly instance. These packs are packaged as Maven artifacts, and the provisioning tool downloads them from
+a Maven repository. Which particular layers from given packs should be actually included in the provisioned instance can
+be further limited in the `<layers>` element. If the element is not present, all layers from configured feature packs
+will be included. Limiting the number of layers will produce a smaller Wildfly instance, in terms of disk space and 
+memory footprint.
+
+## Building the Application and Provisioning the Server
+
+In this demo, the Wildfly Maven Plugin execution is part of the "openshift" Maven profile. That way, running 
+`mvn clean package` will only build the application WAR, but it won't provision a server instance.
+
+In order to provision a Wildfly server instance with the application WAR deployed in it, it is needed to activate the
+"openshift" profile:
+
+```shell
+$ mvn clean package -Popenshift
+```
+
+The provisioned server will be created in the `target/server/` directory. You can run this server by executing following 
+command:
+
+```shell
+$ ./target/server/bin/standalone.sh
+```
+
+To verify that the application is correctly deployed, you visit <http://localhost:8080/> in your browser. You should see
+a simple "Hello" page with a link to the JAX-RS endpoint.
+
+Note that the "openshift" Maven profile is also automatically activated in the Wildfly S2I workflow, which expects a
+server instance to be provisioned by the Maven build.
+
+## Preparing a CLI Configuration Script
+
+With real life applications, it is usually necessary to configure the application server in a specific way for an
+application to work. Common aspects that may require configuration are connections to database servers or messaging brokers,
+integration with SSO servers, etc. The Wildfly S2I container images offer two ways how to perform configuration:
+
+* via environment variables,
+* via a Wildfly CLI script.
+
+This section concentrates on the CLI script configuration. Advantages of using a CLI script are that:
+
+1. more complex configurations can be achieved, compared to configuration via environment variables,
+2. for people who are already used to working with Wildfly CLI, it may be more straightforward to define configuration
+in this way.
+
+For demonstrational purposes, a simple CLI script was created
+in [openshift/wildfly-config.cli](blob/main/openshift/wildfly-config.cli) which reconfigures Wildfly logging subsystem
+to log DEBUG messages from our application to standard output:
+
+```
+/subsystem=logging/logger=org.wildfly.demo.config:add(level=DEBUG)
+/subsystem=logging/console-handler=CONSOLE:write-attribute(name=level, value=DEBUG)
+```
+
+## Prepare a Helm Values File
+
+The values file is sort of configuration file for a Helm Chart. Values from this file are taken and substituted into
+templates defined by given Helm Chart. The structure of the YAML file is dictated by the particular Helm Chart that is
+being used. For the Wildfly Helm Chart case, you can check the README file in the 
+[Wildfly Helm Chart GitHub repository](https://github.com/wildfly/wildfly-charts/blob/main/charts/wildfly/README.md) for
+help.
+
+In our case, the file was prepared at [openshift/helm.yaml](blob/main/openshift/helm.yaml) and the content is as
+follows, some comments are added here for clarity:
 
 ```yaml
 build:
+  # application source GIT repository
   uri: https://github.com/TomasHofman/wildfly-openshift-configuration-example.git
+  # and the repository branch
   ref: main
-  contextDir: helloworld-rs
+  enabled: true
+   # mode can be either s2i or bootable-jar
+  mode: s2i
+  output:
+    # how the resulting container should be stored
+    kind: ImageStreamTag
   s2i:
-    galleonLayers:
-      - jaxrs-server
-      - postgresql-datasource # <- the database driver layer
-  mode: bootable-jar
-  ...
+    # container image for building the application from source and provisioning the server, there is also a jdk17 variant
+    builderImage: 'quay.io/wildfly/wildfly-s2i-jdk11'
+    # runtime container image where the app will run, there is also a jdk17 variant
+    runtimeImage: 'quay.io/wildfly/wildfly-runtime-jdk11'
+    version: latest
+deploy:
+  enabled: true
+  env:
+    # env variable for the runtime container, that says what CLI configuration scripts should be run during container startup,
+    # check the volume related values bellow regarding the path
+    - name: CLI_LAUNCH_SCRIPT
+      value: /etc/wildfly/wildfly-config.cli
+  # this says that we want to take a ConfigMap and use it as a filesystem volume
+  volumes:
+    - name: wildfly-config
+      configMap:
+        name: wildfly-config
+  # and this says where the volume should be mounted in the filesystem
+  volumeMounts:
+    - name: wildfly-config
+      mountPath: /etc/wildfly
+  # we want to have a route created and it should be TLS encrypted
+  route:
+    enabled: true
+    tls:
+      enabled: true
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+  # it's a good practice to define liveness & readiness probes, these endpoints are automatically available thanks to
+  # the "microprofile-health" galleon layer we added into the provisioning config in the Wildfly Maven Plugin
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: admin
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: admin
+  startupProbe:
+    failureThreshold: 36
+    httpGet:
+      path: /health/live
+      port: admin
+    initialDelaySeconds: 5
+    periodSeconds: 5
+  # and finally, how many pods we want to have running
+  replicas: 1
 ```
 
-If you create the OpenShift resources via the `oc new-app` CLI command, specify the `GALLEON_PROVISION_LAYERS` build
-environment variable:
+## Deploying on OpenShift
 
-```shell
-oc new-app --name wildfly-app \
-     https://github.com/TomasHofman/wildfly-openshift-configuration-example.git \
-     --image-stream=wildfly \
-     --build-env GALLEON_PROVISION_LAYERS=jaxrs-server,postgresql-datasource \
-     ...
-```
+We are going to use Wildfly Helm Chart to deploy our app on the OpenShift cluster.
 
-If you already have the resource manifests in YAML format, you set the `GALLEON_PROVISION_LAYERS` variable in
-the `*-build-artifacts` build config:
+1. Log in to the cluster with the `oc` CLI tool: 
+   ```shell
+   $ oc login --token=[token string] --server=[cluster url]
+   ```
+   (You can copy the login command in the OpenShift Web Console user
+   menu.)
+   
+2. Add the Wildfly Helm Charts repository to your Helm installation:
+   ```shell
+   $ helm repo add wildfly http://docs.wildfly.org/wildfly-charts/
+   ```
+   
+   You can check that the "wildfly" chart is searchable:
+   ```shell
+   $ helm repo add wildfly http://docs.wildfly.org/wildfly-charts/
+   wildfly/wildfly                     	2.0.1        	           	Build and Deploy WildFly applications on OpenShift
+   [...]
+   ```
+   The version of the chart should be 2.0.0 or higher.
 
-```yaml
-- apiVersion: build.openshift.io/v1
-  kind: BuildConfig
-  metadata:
-    name: wildfly-app-build-artifacts
-  spec:
-    strategy:
-      type: Source
-      sourceStrategy:
-        from:
-          kind: DockerImage
-          name: 'quay.io/wildfly/wildfly-centos7:26.1'
-        env:
-          - name: GALLEON_PROVISION_LAYERS
-            value: 'jaxrs-server,postgresql-datasource' # <- the database driver layer
-          - name: GALLEON_PROVISION_DEFAULT_FAT_SERVER
-            value: 'true'
-    ...
-```
+3. Let `helm` create all the OpenShift resources necessary to build and deploy the application:
+   ```shell
+   $ helm install example-wildfly-app -f openshift/helm.yaml wildfly/wildfly
+   ```
+   This command should result in creation of multiple OpenShift resources. You can list them with the following `oc`
+   command:
+   ```shell
+   $ oc get all --selector app.kubernetes.io/instance=example-wildfly-app
+   NAME                               TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+   service/example-wildfly-app        ClusterIP   172.30.46.37   <none>        8080/TCP   2h
+   service/example-wildfly-app-ping   ClusterIP   None           <none>        8888/TCP   28h
 
-(See the [wildfly-datasources-galleon-pack](https://github.com/wildfly-extras/wildfly-datasources-galleon-pack) for the
-list of supported database vendors and available layers.)
+   NAME                                  READY   UP-TO-DATE   AVAILABLE   AGE
+   deployment.apps/example-wildfly-app   1/1     1            1           2h
 
-### Step 2. - Configuring EAP via Env Variables
+   NAME                                                                 TYPE     FROM         LATEST
+   buildconfig.build.openshift.io/example-wildfly-app                   Docker   Dockerfile   2
+   buildconfig.build.openshift.io/example-wildfly-app-build-artifacts   Source   Git@main     1
 
-Now, after the Wildfly application image is built, it's going to contain the PostgreSQL driver module. The next step is
-to configure a datasource, which uses this driver. The usual way is to set following environment variables on the
-application runtime image:
+   NAME                                                                 IMAGE REPOSITORY                                                                                                                   TAGS     UPDATED
+   imagestream.image.openshift.io/example-wildfly-app                   default-route-openshift-image-registry.apps.sandbox-m2.ll9k.p1.openshiftapps.com/thofman-dev/example-wildfly-app                   latest   2 hours ago
+   imagestream.image.openshift.io/example-wildfly-app-build-artifacts   default-route-openshift-image-registry.apps.sandbox-m2.ll9k.p1.openshiftapps.com/thofman-dev/example-wildfly-app-build-artifacts   latest   2 hours ago
 
-* POSTGRESQL_URL,
-* POSTGRESQL_PASSWORD,
-* POSTGRESQL_USER.
+   NAME                                           HOST/PORT                                                              PATH   SERVICES              PORT    TERMINATION     WILDCARD
+   route.route.openshift.io/example-wildfly-app   wildfly-v2-app-thofman-dev.apps.sandbox-m2.ll9k.p1.openshiftapps.com          example-wildfly-app   <all>   edge/Redirect   None
+   ```
+   
+4. You can now watch the application being built and deployed. You can do that either in the OpenShift Web Console, or 
+   via the `oc` command in the terminal.
 
-There's a lot more variables available, which allow you to configure additional details on the datasource, check the
-[documentation](https://github.com/wildfly-extras/wildfly-datasources-galleon-pack/blob/main/doc/postgresql/README.md).
+   To watch the builds:
+   ```shell
+   $ oc get build -w
+   NAME                                    TYPE     FROM          STATUS     STARTED         DURATION
+   example-wildfly-app-build-artifacts-1   Source   Git@8f914f9   Running    2 minutes ago   
+   example-wildfly-app-build-artifacts-1   Source   Git@8f914f9   Complete   2 minutes ago   2m23s
+   example-wildfly-app-1                   Docker   Dockerfile    Pending                    
+   example-wildfly-app-1                   Docker   Dockerfile    Running    33 seconds ago   
+   example-wildfly-app-1                   Docker   Dockerfile    Complete   About a minute ago   1m10s
+   ```
+   
+   When both builds get completed, you can watch the deployment readiness to progress:
+   ```shell
+   oc get deployment wildfly-v2-app -w
+   NAME                  READY   UP-TO-DATE   AVAILABLE   AGE
+   example-wildfly-app   0/0     0            0           2h
+   example-wildfly-app   0/1     1            0           2h
+   example-wildfly-app   1/1     1            1           2h
+   ```
+   When the AVAILABLE column becomes 1, the application should be ready to recieve requests.
 
-## Configuration with a CLI Script
+5. Try to access the application. To learn the application URL, inspect the "route" resource:
+   ```shell
+   $ oc get route
+   NAME                  HOST/PORT                                                                   PATH   SERVICES              PORT    TERMINATION     WILDCARD
+   example-wildfly-app   example-wildfly-app-thofman-dev.apps.sandbox-m2.ll9k.p1.openshiftapps.com          example-wildfly-app   <all>   edge/Redirect   None
+   ```
+   In my case, the "example-wildfly-app-thofman-dev.apps.sandbox-m2.ll9k.p1.openshiftapps.com" string is the URL of my
+   deployed application. Use your browser to visit the URL shown in your route, and click on the link to the 
+   "/api/hello" JAX-RS endpoint. Make a couple of requests there.
 
-Here we finally come to the point. What if you want to configure something that's not possible to achieve with
-environment variables? Or perhaps you feel more comfortable configuring Wildfly with a CLI script, because that's what
-you already know from your baremetal days. We are going to investigate this apprach in this section.
-
-### Step 1. - Adding the Database Driver
-
-Staying with the original example of configuring a datasource, we still need to include the database JDBC driver. We
-would achieve that in exactly the same way as [before](#add-db-driver), with the only difference being that instead of
-the `postgresql-datasource` galleon layer, we would use the `postgresql-driver` layer. The latter layer only adds the
-JDBC driver module, but *doesn't configure any datasource* by itself, as we are going to that via a Wildfly CLI script.
-
-### Step 2. - Configuration via a CLI Script
-
-As already mentioned, the Wildfly application images contain initialization scripts which configure and then run the
-Wildfly instance when the image is executed. These scripts define certain injection points, that allow you to insert
-some actions of your own. In particular, you can define a `preconfigure.sh` and `postconfigure.sh` scripts, which are
-executed before and after the standard Wildfly configuration (meaning the configuration driven by environment variables)
-takes place.
-
-The `preconfigure.sh` and `postconfigure.sh` are expected to be present in the `$JBOSS_HOME/extensions/` directory. They
-do not exist by default. If you provide them, they will be executed at respective times before 
+6. Check output of your application pod, and it should contain the DEBUG messages printed by the JAX-RS endpoint:
+   ```text
+   [...]
+   12:24:08,356 INFO [org.jboss.as] (Controller Boot Thread) WFLYSRV0025: WildFly Full 26.1.1.Final (WildFly Core 18.1.1.Final) started in 34201ms - Started 269 of 354 services (138 services are lazy, passive or on-demand) - Server configuration file in use: standalone.xml
+   12:24:08,357 INFO [org.jboss.as] (Controller Boot Thread) WFLYSRV0060: Http management interface listening on http://0.0.0.0:9990/management
+   12:24:08,357 INFO [org.jboss.as] (Controller Boot Thread) WFLYSRV0054: Admin console is not enabled
+   13:07:34,653 DEBUG [org.wildfly.demo.config.HelloEndpoint] (default task-1) Received a /hello endpoint request
+   13:07:35,747 DEBUG [org.wildfly.demo.config.HelloEndpoint] (default task-1) Received a /hello endpoint request
+   ```

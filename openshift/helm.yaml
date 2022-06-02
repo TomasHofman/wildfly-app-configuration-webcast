@@ -1,0 +1,45 @@
+build:
+  uri: https://github.com/TomasHofman/wildfly-openshift-configuration-example.git
+  ref: main
+  enabled: true
+  mode: s2i
+  output:
+    kind: ImageStreamTag
+  s2i:
+    builderImage: 'quay.io/wildfly/wildfly-s2i-jdk11'
+    runtimeImage: 'quay.io/wildfly/wildfly-runtime-jdk11'
+    version: latest
+deploy:
+  enabled: true
+  env:
+    - name: CLI_LAUNCH_SCRIPT
+      value: /etc/wildfly/wildfly-config.cli
+  volumes:
+    - name: wildfly-config
+      configMap:
+        name: wildfly-config
+  volumeMounts:
+    - name: wildfly-config
+      mountPath: /etc/wildfly
+  route:
+    enabled: true
+    tls:
+      enabled: true
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: admin
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: admin
+  replicas: 1
+  startupProbe:
+    failureThreshold: 36
+    httpGet:
+      path: /health/live
+      port: admin
+    initialDelaySeconds: 5
+    periodSeconds: 5
