@@ -137,6 +137,32 @@ to log DEBUG messages from our application to standard output:
 /subsystem=logging/console-handler=CONSOLE:write-attribute(name=level, value=DEBUG)
 ```
 
+## Create an OpenShift ConfigMap with the CLI Script
+
+We need the CLI script to be available to the application containers. We don't want to make it part of the container
+image however, because we assume that the file would contain environment specific configuration, i.e. the CLI script for
+an imaginary staging environment would be a little different from the script for the production environment.
+
+The best way to achieve that is to create an OpenShift ConfigMap containing the script.
+
+Firstly, log in to your cluster with the `oc` CLI tool:
+
+```shell
+$ oc login --token=[token string] --server=[cluster url]
+```
+
+(You can copy the login command in the OpenShift Web Console user menu.)
+
+Then, create the ConfigMap:
+
+```shell
+$ oc create configmap wildfly-config --from-file openshift/wildfly-config.cli 
+configmap/wildfly-config created
+```
+
+This ConfigMap would later be mounted to the application container filesystem, from where it can be read by the Wildfly
+launcher script.
+
 ## Prepare a Helm Values File
 
 The values file is sort of configuration file for a Helm Chart. Values from this file are taken and substituted into
@@ -214,14 +240,7 @@ deploy:
 
 We are going to use Wildfly Helm Chart to deploy our app on the OpenShift cluster.
 
-1. Log in to the cluster with the `oc` CLI tool: 
-   ```shell
-   $ oc login --token=[token string] --server=[cluster url]
-   ```
-   (You can copy the login command in the OpenShift Web Console user
-   menu.)
-   
-2. Add the Wildfly Helm Charts repository to your Helm installation:
+1. Add the Wildfly Helm Charts repository to your Helm installation:
    ```shell
    $ helm repo add wildfly http://docs.wildfly.org/wildfly-charts/
    ```
@@ -234,7 +253,7 @@ We are going to use Wildfly Helm Chart to deploy our app on the OpenShift cluste
    ```
    The version of the chart should be 2.0.0 or higher.
 
-3. Let `helm` create all the OpenShift resources necessary to build and deploy the application:
+2. Let `helm` create all the OpenShift resources necessary to build and deploy the application:
    ```shell
    $ helm install example-wildfly-app -f openshift/helm.yaml wildfly/wildfly
    ```
@@ -261,7 +280,7 @@ We are going to use Wildfly Helm Chart to deploy our app on the OpenShift cluste
    route.route.openshift.io/example-wildfly-app   wildfly-v2-app-thofman-dev.apps.sandbox-m2.ll9k.p1.openshiftapps.com          example-wildfly-app   <all>   edge/Redirect   None
    ```
    
-4. You can now watch the application being built and deployed. You can do that either in the OpenShift Web Console, or 
+3. You can now watch the application being built and deployed. You can do that either in the OpenShift Web Console, or 
    via the `oc` command in the terminal.
 
    To watch the builds:
@@ -285,7 +304,7 @@ We are going to use Wildfly Helm Chart to deploy our app on the OpenShift cluste
    ```
    When the AVAILABLE column becomes 1, the application should be ready to recieve requests.
 
-5. Try to access the application. To learn the application URL, inspect the "route" resource:
+4. Try to access the application. To learn the application URL, inspect the "route" resource:
    ```shell
    $ oc get route
    NAME                  HOST/PORT                                                                   PATH   SERVICES              PORT    TERMINATION     WILDCARD
@@ -295,7 +314,7 @@ We are going to use Wildfly Helm Chart to deploy our app on the OpenShift cluste
    deployed application. Use your browser to visit the URL shown in your route, and click on the link to the 
    "/api/hello" JAX-RS endpoint. Make a couple of requests there.
 
-6. Check output of your application pod, and it should contain the DEBUG messages printed by the JAX-RS endpoint:
+5. Check output of your application pod, and it should contain the DEBUG messages printed by the JAX-RS endpoint:
    ```text
    [...]
    12:24:08,356 INFO [org.jboss.as] (Controller Boot Thread) WFLYSRV0025: WildFly Full 26.1.1.Final (WildFly Core 18.1.1.Final) started in 34201ms - Started 269 of 354 services (138 services are lazy, passive or on-demand) - Server configuration file in use: standalone.xml
