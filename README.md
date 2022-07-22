@@ -31,8 +31,8 @@ the [Developer Sandbox for Red Hat OpenShift page](https://developers.redhat.com
 
 ## Example Application
 
-The sample application in this repository contains a static [HTML page](blob/main/src/main/webapp/index.html) and a 
-[JAX-RS endpoint](blob/main/src/main/java/org/wildfly/demo/config/HelloEndpoint.java). This will be important to
+The sample application in this repository contains a static [HTML page](src/main/webapp/index.html) and a 
+[JAX-RS endpoint](src/main/java/org/wildfly/demo/config/HelloEndpoint.java). This will be important to
 determine which Galleon layers to include to provision the Wildfly server, as can be seen further on.
 
 ## Configuring the Wildfly Maven Plugin
