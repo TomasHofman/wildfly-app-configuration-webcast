@@ -39,7 +39,7 @@ the [Developer Sandbox for Red Hat OpenShift page](https://developers.redhat.com
 ## About the Example Application
 
 The sample application in this repository contains a static [HTML page](src/main/webapp/index.html) and a 
-[JAX-RS endpoint](src/main/java/org/wildfly/demo/config/HelloEndpoint.java). This is going to be important to know 
+[JAX-RS endpoint](src/main/java/org/wildfly/demo/HelloEndpoint.java). This is going to be important to know 
 in order to determine which Galleon layers to include in the Wildfly server.
 
 ## Configuring the Wildfly Maven Plugin
@@ -136,11 +136,11 @@ This section concentrates on the CLI script configuration. Advantages of using a
 in this way.
 
 For demonstrational purposes, a simple CLI script was created
-in [openshift/wildfly-config.cli](openshift/wildfly-config.cli) which reconfigures Wildfly logging subsystem
+in [openshift/wildfly-runtime-config.cli](openshift/wildfly-runtime-config.cli) which reconfigures Wildfly logging subsystem
 to log DEBUG messages from our application to standard output. The CLI script contains these commands:
 
 ```
-/subsystem=logging/logger=org.wildfly.demo.config:add(level=DEBUG)
+/subsystem=logging/logger=org.wildfly.demo:add(level=DEBUG)
 /subsystem=logging/console-handler=CONSOLE:write-attribute(name=level, value=DEBUG)
 ```
 
@@ -172,7 +172,7 @@ oc project <namespace-name>
 Then, create the ConfigMap:
 
 ```shell
-$ oc create configmap wildfly-config --from-file openshift/wildfly-config.cli 
+$ oc create configmap wildfly-config --from-file openshift/wildfly-runtime-config.cli 
 configmap/wildfly-config created
 ```
 
@@ -215,7 +215,7 @@ deploy:
   env:
     # path to CLI configuration script inside the application container (it has to be mounted under this path):
     - name: CLI_LAUNCH_SCRIPT
-      value: /etc/wildfly/wildfly-config.cli
+      value: /etc/wildfly/wildfly-runtime-config.cli
   # mount a ConfigMap to the filesystem:
   volumes:
     - name: wildfly-config
@@ -342,8 +342,8 @@ We are going to use Wildfly Helm Chart to deploy our app on the OpenShift cluste
    12:24:08,356 INFO [org.jboss.as] (Controller Boot Thread) WFLYSRV0025: WildFly Full 26.1.1.Final (WildFly Core 18.1.1.Final) started in 34201ms - Started 269 of 354 services (138 services are lazy, passive or on-demand) - Server configuration file in use: standalone.xml
    12:24:08,357 INFO [org.jboss.as] (Controller Boot Thread) WFLYSRV0060: Http management interface listening on http://0.0.0.0:9990/management
    12:24:08,357 INFO [org.jboss.as] (Controller Boot Thread) WFLYSRV0054: Admin console is not enabled
-   13:07:34,653 DEBUG [org.wildfly.demo.config.HelloEndpoint] (default task-1) Received a /hello endpoint request
-   13:07:35,747 DEBUG [org.wildfly.demo.config.HelloEndpoint] (default task-1) Received a /hello endpoint request
+   13:07:34,653 DEBUG [org.wildfly.demo.HelloEndpoint] (default task-1) Received a /hello endpoint request
+   13:07:35,747 DEBUG [org.wildfly.demo.HelloEndpoint] (default task-1) Received a /hello endpoint request
    ```
    
    The DEBUG messages at the end of the log indicate that the CLI configuration script was applied (DEBUG messages

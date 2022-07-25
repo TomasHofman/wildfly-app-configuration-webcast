@@ -1,4 +1,4 @@
-package org.wildfly.demo.config;
+package org.wildfly.demo;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;

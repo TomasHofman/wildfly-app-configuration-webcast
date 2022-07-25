@@ -13,7 +13,7 @@ deploy:
   enabled: true
   env:
     - name: CLI_LAUNCH_SCRIPT
-      value: /etc/wildfly/wildfly-config.cli
+      value: /etc/wildfly/wildfly-runtime-config.cli
   volumes:
     - name: wildfly-config
       configMap:

@@ -1,2 +1,0 @@
-/subsystem=logging/logger=org.wildfly.demo.config:add(level=DEBUG)
-/subsystem=logging/console-handler=CONSOLE:write-attribute(name=level, value=DEBUG)
