@@ -136,7 +136,7 @@ This section concentrates on the CLI script configuration. Advantages of using a
 in this way.
 
 For demonstrational purposes, a simple CLI script was created
-in [openshift/wildfly-config.cli](blob/main/openshift/wildfly-config.cli) which reconfigures Wildfly logging subsystem
+in [openshift/wildfly-config.cli](openshift/wildfly-config.cli) which reconfigures Wildfly logging subsystem
 to log DEBUG messages from our application to standard output. The CLI script contains these commands:
 
 ```
@@ -187,7 +187,7 @@ being used. For the Wildfly Helm Chart case, you can check the README file in th
 [Wildfly Helm Chart GitHub repository](https://github.com/wildfly/wildfly-charts/blob/main/charts/wildfly/README.md) for
 help.
 
-In our case, the file is prepared at [openshift/helm.yaml](blob/main/openshift/helm.yaml) and it contains this:
+In our case, the file is prepared at [openshift/helm.yaml](openshift/helm.yaml) and it contains this:
 
 ```yaml
 build:
