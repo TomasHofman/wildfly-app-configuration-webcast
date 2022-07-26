@@ -1,6 +1,6 @@
-# start server instance in admin-only mode
-embed-server --admin-only
+#
+# Build-Time Configuration Script
+#
 
-# perform configuration steps
 /subsystem=undertow/configuration=filter/response-header=custom-response-header:add(header-name="powered-by", header-value="Wildfly")
 /subsystem=undertow/server=default-server/host=default-host/filter-ref=custom-response-header:add

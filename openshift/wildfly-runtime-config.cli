@@ -1,2 +1,6 @@
+#
+# Run-Time Configuration Script
+#
+
 /subsystem=logging/logger=org.wildfly.demo:add(level=DEBUG)
 /subsystem=logging/console-handler=CONSOLE:write-attribute(name=level, value=DEBUG)
