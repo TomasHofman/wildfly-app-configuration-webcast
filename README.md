@@ -1,11 +1,13 @@
-# Wildfly OpenShift Image Configuration Example
+# Wildfly OpenShift Configuration Quickstart
 
-This quickstart demonstrates **how to deploy and configure the Wildfly application server on OpenShift**.
+This is the talkative version of the readme. [Here is the brief version.](README-brief.md)
+
+This quickstart demonstrates **how to deploy and configure the Wildfly application server on an OpenShift cluster**.
 It is going to concentrate on how a Wildfly instance can be configured with a **Wildfly CLI
-script** (rather than via environment variables). The quickstart leverages the new 
+script** (rather than via environment variables). This quickstart leverages the new 
 [Wildfly S2I v2 workflow](https://www.wildfly.org/news/2021/10/29/wildfly-s2i-v2-overview/), introduced in
 [Wildfly 26](https://www.wildfly.org/news/2021/12/16/WildFly26-Final-Released/), which simplifies the deployment process
-compared to S2I v1 workflow used in previous Wildfly releases.
+compared to the S2I v1 workflow used by previous Wildfly releases.
 
 Following technologies are used in this quickstart:
 
@@ -14,11 +16,12 @@ Following technologies are used in this quickstart:
 * [Wildfly S2I (Source to Image) v2](https://github.com/wildfly/wildfly-s2i/) container images,
 * [wildfly Helm Charts 2.x](https://docs.wildfly.org/wildfly-charts/).
 
-In following sections, we are going to:
-1. Build an example application from this repository, provision a Wildfly server instance with the application deployed.
-2. Prepare a simple Wildfly CLI configuration script, to modify the Wildfly server configuration.
-3. Deploy the Wildfly instance on an OpenShift cluster in a way so that the configuration CLI script is applied to it
-   automatically.
+In following sections, we are going to perform following steps:
+
+1. Prepare two Wildfly CLI configuration scripts, that are going to be used to configure a Wildfly instance at different stages of deployment.
+2. Build an example application from this repository.
+3. Provision a Wildfly server instance with the application deployed.
+4. Deploy the provisioned Wildfly instance on an OpenShift cluster.
 
 <!--
 For comparison, the [pre-wildfly-26](tree/pre-wildfly-26) branch of this repository shows how the same result could be
@@ -39,118 +42,118 @@ the [Developer Sandbox for Red Hat OpenShift page](https://developers.redhat.com
 ## About the Example Application
 
 The sample application in this repository contains a static [HTML page](src/main/webapp/index.html) and a 
-[JAX-RS endpoint](src/main/java/org/wildfly/demo/HelloEndpoint.java). This is going to be important to know 
-in order to determine which Galleon layers to include in the Wildfly server.
+[JAX-RS endpoint](src/main/java/org/wildfly/demo/HelloEndpoint.java). On request, the JAX-RS endpoint logs a DEBUG
+message and responds with a short JSON document. Note that in default configuration, Wildfly *doesn't* print DEBUG 
+messages on the standard output. We are going to configure the Wildfly instance to change this.
 
-## Configuring the Wildfly Maven Plugin
+### CLI Configuration Scripts
 
-As opose to the old Wildfly S2I workflow, the provisioning of the Wildfly server instance is now part of the Maven build
-process. To provision a server instance, the [pom.xml](pom.xml) contains following section with configuration of the
+There are two CLI configuration scripts prepared:
+
+* the [build-time CLI configuration script](openshift/wildfly-buildtime-config.cli), which is going to be applied
+  during the server provisioning stage,
+* and the [run-time CLI configuration script](openshift/wildfly-runtime-config.cli), which is going to be applied 
+  during the application container startup stage.
+
+The build-time configuration option is useful to apply general configuration that's needed in all application 
+deployments (in all environments). It's going to be part of the application container image. An advantage of applying
+configuration at build time is that it's not going to waste precious time during container start up. In our case, it
+configures the Undertow subsystem to add "powered-by: Wildfly" HTTP header to all HTTP responses. 
+
+The run-time configuration option is useful for environment specific configuration, e.g. to set connections
+to different databases in each environment. In our case, it configures Wildfly logging subsystem to print DEBUG
+messages to the standard output.
+
+### The wildfly-maven-plugin Configuration
+
+As opose to the Wildfly S2I v1 workflow, the provisioning of the Wildfly server instance is now part of the Maven build
+process. To provision a server instance, the [pom.xml](pom.xml) contains the "openshift" profile with configuration of the
 [Wildfly Maven Plugin](https://github.com/wildfly/wildfly-maven-plugin/):
 
 ```xml
-<plugin>
-    <groupId>org.wildfly.plugins</groupId>
-    <artifactId>wildfly-maven-plugin</artifactId>
-    <version>3.0.0.Final</version>
-    <configuration>
-        <feature-packs>
-            <feature-pack>
-                <location>org.wildfly:wildfly-galleon-pack:${version.wildfly}</location>
-            </feature-pack>
-        </feature-packs>
-        <!-- List of layers to build the application server from: -->
-        <layers>
-            <!-- The jaxrs-server layer provides JAX-RS API implementation -->
-            <layer>jaxrs-server</layer>
-            <!-- The microprofile-health layer provides microprofile health endpoints at
-                 [server address]:9990/api/live and [server address]:9990/api/ready -->
-            <layer>microprofile-health</layer>
-        </layers>
-        <galleon-options>
-            <jboss-fork-embedded>true</jboss-fork-embedded>
-        </galleon-options>
-        <runtime-name>ROOT.war</runtime-name>
-    </configuration>
-    <executions>
-        <execution>
-            <goals>
-                <goal>package</goal>
-            </goals>
-        </execution>
-    </executions>
-</plugin>
+        <profile>
+            <id>openshift</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.wildfly.plugins</groupId>
+                        <artifactId>wildfly-maven-plugin</artifactId>
+                        <version>${version.wildfly.plugin}</version>
+                        <configuration>
+                            <feature-packs>
+                                <feature-pack> <!-- <1> -->
+                                    <location>org.wildfly:wildfly-galleon-pack:${version.wildfly}</location>
+                                </feature-pack>
+                            </feature-packs>
+                            <layers> <!-- <2> -->
+                                <layer>jaxrs-server</layer>
+                                <layer>microprofile-health</layer>
+                            </layers>
+                            <galleon-options>
+                                <jboss-fork-embedded>true</jboss-fork-embedded>
+                            </galleon-options>
+                            <runtime-name>ROOT.war</runtime-name>
+                            <packaging-scripts>
+                                <execution>
+                                    <scripts> <!-- <3> -->
+                                        <script>openshift/wildfly-buildtime-config.cli</script>
+                                    </scripts>
+                                </execution>
+                            </packaging-scripts>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>package</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
 ```
 
-The configuration contains two important sections that determine which extensions are going to be included in the
-provisioned server instance:
+There are three points to note in the wildfly-maven-plugin configuration above:
 
-1. a list of feature packs (the `<feature-packs>` element),
-2. and a list of layers (the `<layers>` element).
+1. A list of galleon feature packs to provision a server from,
+2. a list of galleon layers to include in the provisioned server,
+3. a list of CLI scripts to be applied to the provisioned server at build time.
 
-Explainer: A feature pack (aka a Galleon pack) is a package of functionalities (called layers) that can be used to
+A feature pack (aka a Galleon pack) is a package of functionalities (called layers) that can be used to
 provision a Wildfly instances. These packs are packaged as Maven artifacts, and the provisioning tool downloads them from
 a Maven repository. Which particular layers from given packs should be actually included in the provisioned instance can
 be further limited in the `<layers>` element. If the element is not present, all layers from configured feature packs
 are included. Limiting the number of layers will produce a smaller Wildfly instance in terms of disk space and 
 memory footprint.
 
-## Building the Application and Provisioning the Server
+## Provisioning a Server Locally
 
-In this demo, the Wildfly Maven Plugin execution is part of the "openshift" Maven profile. That way, running 
-`mvn clean package` only builds the application WAR, but doesn't provision a server instance.
+Running `mvn clean package` will only build the application WAR, without provisioning a Wildfly server instance.
 
-In order to provision a Wildfly server instance with the application WAR deployed in it, it is needed to activate the
-"openshift" profile:
+To also provision a server instance, activate the "openshift" profile:
 
 ```shell
 $ mvn clean package -Popenshift
 ```
 
-The provisioned server is created in the `target/server/` directory. You can run this server by executing following 
+The provisioned server will be created in the `target/server/` directory. You can run this instance locally by executing following 
 command:
 
 ```shell
 $ ./target/server/bin/standalone.sh
 ```
 
-To verify that the application is correctly deployed, you visit <http://localhost:8080/> in your browser. You should see
+To verify that the application is correctly deployed, you can visit <http://localhost:8080/> in your browser. You should see
 a simple "Hello" page with a link to the JAX-RS endpoint.
 
-Note that the "openshift" Maven profile is also automatically activated in the Wildfly S2I workflow, which expects a
-server instance to be provisioned by the Maven build.
+(You don't in fact need to provision the server instance locally in order to deploy the application on an OpenShift
+cluster. The S2I build process which produces the application container image from application sources runs entirely 
+on the cluster side.)
 
-## Preparing a CLI Configuration Script
+## Building and Deploying on OpenShift
 
-With real life applications, it is usually necessary to configure the application server in a specific way for an
-application to work. Common aspects that may require configuration are connections to database servers or messaging brokers,
-integration with SSO servers, etc. The Wildfly S2I container images offer two ways how to perform configuration:
-
-* via environment variables,
-* via a Wildfly CLI script.
-
-This section concentrates on the CLI script configuration. Advantages of using a CLI script are that:
-
-1. more complex configurations can be achieved, compared to configuration via environment variables,
-2. for people who are already used to working with Wildfly CLI, it may be more straightforward to define configuration
-in this way.
-
-For demonstrational purposes, a simple CLI script was created
-in [openshift/wildfly-runtime-config.cli](openshift/wildfly-runtime-config.cli) which reconfigures Wildfly logging subsystem
-to log DEBUG messages from our application to standard output. The CLI script contains these commands:
-
-```
-/subsystem=logging/logger=org.wildfly.demo:add(level=DEBUG)
-/subsystem=logging/console-handler=CONSOLE:write-attribute(name=level, value=DEBUG)
-```
-
-### Create an OpenShift ConfigMap with the CLI Script
-
-We need the CLI script to be available to the application containers. We don't want to make it part of the container
-image however, because we assume that the file would contain environment specific configuration. (For instance, the
-staging environment configuration can be different from the production enviornment configuration.)
-
-In order to achieve that, we are going to create an OpenShift ConfigMap containing the script.
+### Logging to a Cluster
 
 Firstly, log in to your cluster with the `oc` CLI tool. The login command can be obtained from the user menu of the
 OpenShift Web Console:
@@ -169,7 +172,10 @@ Make sure you are in the right namespace:
 oc project <namespace-name>
 ```
 
-Then, create the ConfigMap:
+### ConfigMap with the Run-Time CLI Script
+
+In order to make the run-time CLI script available to application containers running in a cluster, it needs to be saved
+in a ConfigMap:
 
 ```shell
 $ oc create configmap wildfly-config --from-file openshift/wildfly-runtime-config.cli 
@@ -179,15 +185,20 @@ configmap/wildfly-config created
 This ConfigMap would later be mounted to the application container filesystem, from where it can be read by the Wildfly
 launcher script.
 
-## Prepare a Helm Values File
+### Helm Chart Configuration
 
-The Helm values file is a configuration file for a Helm Chart. Values from this file are taken and substituted into
+What remains now is to create all the required Kubernetes resources to support application container image build and
+deployment. These include BuildConfigs, Deployments, Services, Routes, etc. Instead of creating manifests for these
+resource manually, we are going to use the 
+[Wildfly Helm Chart](https://github.com/wildfly/wildfly-charts/) to instantiate them for us.
+
+Helm Charts are configured via Helm values files. Values from these files are taken and substituted into
 templates defined by a Helm Chart. The structure of the YAML file is dictated by the particular Helm Chart that is
-being used. For the Wildfly Helm Chart case, you can check the README file in the 
-[Wildfly Helm Chart GitHub repository](https://github.com/wildfly/wildfly-charts/blob/main/charts/wildfly/README.md) for
+being used. For the Wildfly Helm Chart case, you can check the 
+[repository README file](https://github.com/wildfly/wildfly-charts/blob/main/charts/wildfly/README.md) for
 help.
 
-In our case, the file is prepared at [openshift/helm.yaml](openshift/helm.yaml) and it contains this:
+An example values file is prepared at [openshift/helm.yaml](openshift/helm.yaml) and it contains this:
 
 ```yaml
 build:
@@ -213,7 +224,7 @@ deploy:
   enabled: true
   # application env variables:
   env:
-    # path to CLI configuration script inside the application container (it has to be mounted under this path):
+    # path to the run-time CLI configuration script inside the application container:
     - name: CLI_LAUNCH_SCRIPT
       value: /etc/wildfly/wildfly-runtime-config.cli
   # mount a ConfigMap to the filesystem:
@@ -252,7 +263,7 @@ deploy:
   replicas: 1
 ```
 
-## Deploying on OpenShift
+### Deploying on OpenShift
 
 We are going to use Wildfly Helm Chart to deploy our app on the OpenShift cluster.
 
