@@ -2,5 +2,5 @@
 # Build-Time Configuration Script
 #
 
-/subsystem=undertow/configuration=filter/response-header=custom-response-header:add(header-name="powered-by", header-value="Wildfly")
-/subsystem=undertow/server=default-server/host=default-host/filter-ref=custom-response-header:add
+/subsystem=undertow/configuration=filter/response-header=response-header1:add(header-name="buildtime-config-applied", header-value="yes")
+/subsystem=undertow/server=default-server/host=default-host/filter-ref=response-header1:add

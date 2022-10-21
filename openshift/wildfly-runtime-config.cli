@@ -2,5 +2,5 @@
 # Run-Time Configuration Script
 #
 
-/subsystem=logging/logger=org.wildfly.demo:add(level=DEBUG)
-/subsystem=logging/console-handler=CONSOLE:write-attribute(name=level, value=DEBUG)
+/subsystem=undertow/configuration=filter/response-header=response-header2:add(header-name="runtime-config-applied", header-value="yes")
+/subsystem=undertow/server=default-server/host=default-host/filter-ref=response-header2:add

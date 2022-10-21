@@ -18,11 +18,12 @@ cd wildfly-openshift-configuration-example/
 
 Review the [pom.xml](pom.xml) (note the `wildfly-maven-plugin` configuration in the "openshift" profile).
 
-Review the [JAX-RS endpoint source](src/main/java/org/wildfly/demo/HelloEndpoint.java)
-(note it prints a DEBUG log message).
+Review the [JAX-RS endpoint source](src/main/java/org/wildfly/demo/HelloEndpoint.java).
 
-Review [openshift/wildfly-buildtime-config.cli](openshift/wildfly-buildtime-config.cli)
-(the script configures Wildfly to add "powered-by: Wildfly" response headers).
+Review [openshift/wildfly-buildtime-config.cli](openshift/wildfly-buildtime-config.cli) and 
+[openshift/wildfly-runtime-config.cli](openshift/wildfly-runtime-config.cli)
+(the scripts configure Wildfly server to add custom HTTP response headers called "buildtime-config-applied" and 
+"runtime-config-applied").
 
 ## Optional - Run the App Locally
 
@@ -39,8 +40,11 @@ Run the server with deployed app:
 In new terminal, request the app JAX-RS endpoint:
 ```shell
 curl -v localhost:8080/api/hello
-# output should contain "powered-by: Wildfly" response header
+...
+< buildtime-config-applied: yes
+...
 ```
+You should see the "buildtime-config-applied" header present in above output.
 
 Ctrl+C to terminate the app server.
 
@@ -117,23 +121,8 @@ example-wildfly-app   example-wildfly-app-thofman-dev.apps.sandbox-m2.ll9k.p1.op
 Request the app JAX-RS endpoint (URL is based on above output):
 ```shell
 curl -v https://example-wildfly-app-thofman-dev.apps.sandbox-m2.ll9k.p1.openshiftapps.com/api/hello
-# Output should contain "powered-by: Wildfly" response header.
-```
-
-Determine application pod name:
-```shell
-oc get pods
-# Example output (the pod in "Running" state is the application pod):
-NAME                                          READY   STATUS      RESTARTS   AGE
-example-wildfly-app-2-build                   0/1     Completed   0          49m
-example-wildfly-app-9dfcff86f-js5dv           1/1     Running     0          48m
-example-wildfly-app-build-artifacts-1-build   0/1     Completed   0          52m
-```
-
-Show application logs:
-```shell
-oc logs example-wildfly-app-9dfcff86f-js5dv
-# Output should end with the app DEBUG message:
 ...
-08:28:55,101 DEBUG [org.wildfly.demo.HelloEndpoint] (default task-1) Received a /hello endpoint request
+< runtime-config-applied: yes
+< buildtime-config-applied: yes
+...
 ```
