@@ -1,14 +1,8 @@
-# See docs at: https://github.com/wildfly/wildfly-charts/blob/main/charts/wildfly/README.md
+# Helm Chart config, see docs at: https://github.com/wildfly/wildfly-charts/blob/main/charts/wildfly/README.md
+
 build:
   uri: https://github.com/TomasHofman/wildfly-openshift-configuration-example.git
   ref: main
-  mode: s2i # or bootable-jar
-  output:
-    kind: ImageStreamTag # or DockerImage
-  s2i:
-    builderImage: 'quay.io/wildfly/wildfly-s2i-jdk11'
-    runtimeImage: 'quay.io/wildfly/wildfly-runtime-jdk11'
-    version: latest
 deploy:
   env:
     - name: CLI_LAUNCH_SCRIPT
