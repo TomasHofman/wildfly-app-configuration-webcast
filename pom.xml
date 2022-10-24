@@ -9,7 +9,8 @@
     <packaging>war</packaging>
 
     <name>Wildfly on OpenShift - Configuration Example</name>
-    <description>An example demonstrating how to configure Wildfly application server deployed on OpenShift.
+    <description>
+        An example demonstrating how to configure Wildfly application server deployed on OpenShift.
     </description>
 
     <licenses>
@@ -25,22 +26,10 @@
         <maven.compiler.target>11</maven.compiler.target>
         <maven.compiler.source>11</maven.compiler.source>
 
-        <version.wildfly>26.1.1.Final</version.wildfly>
+        <version.wildfly>26.1.2.Final</version.wildfly>
         <version.wildfly.plugin>3.0.2.Final</version.wildfly.plugin>
+        <version.wildfly.cloud.galleon.pack>1.1.2.Final</version.wildfly.cloud.galleon.pack>
     </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <!-- Importing the jakartaee8-with-tools BOM adds specs and other useful artifacts as managed dependencies -->
-            <dependency>
-                <groupId>org.wildfly.bom</groupId>
-                <artifactId>wildfly-jakartaee8-with-tools</artifactId>
-                <version>${version.wildfly}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
 
@@ -52,12 +41,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- JBoss Logging -->
-        <dependency>
-            <groupId>org.jboss.logging</groupId>
-            <artifactId>jboss-logging</artifactId>
-            <scope>provided</scope>
-        </dependency>
     </dependencies>
 
     <profiles>
@@ -77,15 +60,13 @@
                             <feature-packs>
                                 <feature-pack>
                                     <location>org.wildfly:wildfly-galleon-pack:${version.wildfly}</location>
+                                    <location>org.wildfly.cloud:wildfly-cloud-galleon-pack:${version.wildfly.cloud.galleon.pack}</location>
                                 </feature-pack>
                             </feature-packs>
                             <!-- List of layers to build the application server from: -->
                             <layers>
                                 <!-- The jaxrs-server layer provides JAX-RS API implementation -->
                                 <layer>jaxrs-server</layer>
-                                <!-- The microprofile-health layer provides microprofile health endpoints at
-                                     [server address]:9990/api/live and [server address]:9990/api/ready -->
-                                <layer>microprofile-health</layer>
                             </layers>
                             <galleon-options>
                                 <jboss-fork-embedded>true</jboss-fork-embedded>
