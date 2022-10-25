@@ -71,6 +71,11 @@ oc project
 Using project "thofman-dev" on server "https://api.sandbox.x8i5.p1.openshiftapps.com:6443".
 ```
 
+Create the ConfigMap with runtime configuration script:
+```shell
+oc create configmap wildfly-config --from-file openshift/wildfly-runtime-config.cli 
+```
+
 Add Wildfly Helm Chart repository:
 ```shell
 helm repo add wildfly http://docs.wildfly.org/wildfly-charts/

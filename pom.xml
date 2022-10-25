@@ -59,7 +59,6 @@
                         <configuration>
                             <feature-packs>
                                 <feature-pack>
-                                    <location>org.wildfly:wildfly-galleon-pack:${version.wildfly}</location>
                                     <location>org.wildfly.cloud:wildfly-cloud-galleon-pack:${version.wildfly.cloud.galleon.pack}</location>
                                 </feature-pack>
                             </feature-packs>
